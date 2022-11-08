@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -175,8 +176,85 @@ func Test_Query_Params(t *testing.T) {
 	utils.AssertEqual(t, expected, buf.String())
 }
 
+// go test -run Test_Body
+func Test_Body(t *testing.T) {
+	buf := bytebufferpool.Get()
+	defer bytebufferpool.Put(buf)
+
+	app := fiber.New()
+	app.Use(New(Config{
+		Format: "${body}",
+		Output: buf,
+	}))
+
+	req := httptest.NewRequest("POST", "/", bytes.NewReader([]byte("Post in test")))
+	req.Header.Add("Content-Type", "text/plain")
+	_, err := app.Test(req)
+	utils.AssertEqual(t, nil, err)
+
+	expectedPostResponse := "Post in test"
+	utils.AssertEqual(t, expectedPostResponse, buf.String())
+}
+
+// go test -run Test_Body_Filtered
+func Test_Body_Filtered(t *testing.T) {
+	buf := bytebufferpool.Get()
+	defer bytebufferpool.Put(buf)
+
+	app := fiber.New()
+	app.Use(New(Config{
+		Format: "${body}",
+		Output: buf,
+	}))
+
+	req := httptest.NewRequest("POST", "/", bytes.NewReader([]byte("Post in test")))
+
+	_, err := app.Test(req)
+	utils.AssertEqual(t, nil, err)
+
+	expectedPostResponse := "[FILTERED]"
+	utils.AssertEqual(t, expectedPostResponse, buf.String())
+}
+
 // go test -run Test_Response_Body
 func Test_Response_Body(t *testing.T) {
+	buf := bytebufferpool.Get()
+	defer bytebufferpool.Put(buf)
+
+	app := fiber.New()
+	app.Use(New(Config{
+		Format: "${resBody}",
+		Output: buf,
+	}))
+
+	app.Get("/", func(c *fiber.Ctx) error {
+		c.Set("Content-Type", "text/plain")
+		return c.SendString("Sample response body")
+	})
+
+	app.Post("/test", func(c *fiber.Ctx) error {
+		c.Set("Content-Type", "text/plain")
+		return c.Send([]byte("Post in test"))
+	})
+
+	_, err := app.Test(httptest.NewRequest("GET", "/", nil))
+	utils.AssertEqual(t, nil, err)
+
+	expectedGetResponse := "Sample response body"
+	utils.AssertEqual(t, expectedGetResponse, buf.String())
+
+	buf.Reset() // Reset buffer to test POST
+
+	_, err = app.Test(httptest.NewRequest("POST", "/test", nil))
+	utils.AssertEqual(t, nil, err)
+
+	expectedPostResponse := "Post in test"
+	utils.AssertEqual(t, expectedPostResponse, buf.String())
+
+}
+
+// go test -run Test_Response_Body_Filtered
+func Test_Response_Body_Filtered(t *testing.T) {
 	buf := bytebufferpool.Get()
 	defer bytebufferpool.Put(buf)
 
@@ -197,7 +275,7 @@ func Test_Response_Body(t *testing.T) {
 	_, err := app.Test(httptest.NewRequest("GET", "/", nil))
 	utils.AssertEqual(t, nil, err)
 
-	expectedGetResponse := "Sample response body"
+	expectedGetResponse := "[FILTERED]"
 	utils.AssertEqual(t, expectedGetResponse, buf.String())
 
 	buf.Reset() // Reset buffer to test POST
@@ -205,7 +283,7 @@ func Test_Response_Body(t *testing.T) {
 	_, err = app.Test(httptest.NewRequest("POST", "/test", nil))
 	utils.AssertEqual(t, nil, err)
 
-	expectedPostResponse := "Post in test"
+	expectedPostResponse := "[FILTERED]"
 	utils.AssertEqual(t, expectedPostResponse, buf.String())
 }
 

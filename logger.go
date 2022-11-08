@@ -222,7 +222,21 @@ func New(config ...Config) fiber.Handler {
 			case TagLatency:
 				return buf.WriteString(fmt.Sprintf("%7v", stop.Sub(start).Round(time.Millisecond)))
 			case TagBody:
-				return buf.Write(c.Body())
+				for k, v := range c.GetReqHeaders() {
+					if k == "Content-Type" {
+						switch v {
+						case "text/plain", "application/json", "application/xml":
+							return buf.Write(c.Body())
+						default:
+						}
+					}
+				}
+
+				if len(c.Request().Body()) > 0 {
+					return buf.WriteString("[FILTERED]")
+				} else {
+					return buf.WriteString("")
+				}
 			case TagBytesReceived:
 				return appendInt(buf, len(c.Request().Body()))
 			case TagBytesSent:
@@ -235,7 +249,17 @@ func New(config ...Config) fiber.Handler {
 				}
 				return appendInt(buf, c.Response().StatusCode())
 			case TagResBody:
-				return buf.Write(c.Response().Body())
+				switch c.GetRespHeader("Content-Type") {
+				case "text/plain", "application/json", "application/xml":
+					return buf.Write(c.Response().Body())
+				default:
+				}
+
+				if len(c.Response().Body()) > 0 {
+					return buf.WriteString("[FILTERED]")
+				} else {
+					return buf.WriteString("")
+				}
 			case TagReqHeaders:
 				reqHeaders := make([]string, 0)
 				for k, v := range c.GetReqHeaders() {
