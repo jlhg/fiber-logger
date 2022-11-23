@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -224,10 +225,8 @@ func New(config ...Config) fiber.Handler {
 			case TagBody:
 				for k, v := range c.GetReqHeaders() {
 					if k == "Content-Type" {
-						switch v {
-						case "text/plain", "application/json", "application/xml":
+						if matched, err := regexp.MatchString(`text/plain|application/(json|xml)`, v); err == nil && matched {
 							return buf.Write(c.Body())
-						default:
 						}
 					}
 				}
